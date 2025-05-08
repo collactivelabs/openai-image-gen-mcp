@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OpenAI Image Generation MCP</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    .result {
+      margin-top: 20px;
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 4px;
+      background-color: #f9f9f9;
+    }
+    .image-container {
+      margin-top: 20px;
+      text-align: center;
+    }
+    .image-container img {
+      max-width: 100%;
+      max-height: 600px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .loading {
+      text-align: center;
+      margin: 20px 0;
+      font-style: italic;
+      color: #666;
+      display: none;
+    }
+    .error {
+      color: #d9534f;
+      background-color: #fdf7f7;
+      border: 1px solid #d9534f;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 20px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>OpenAI Image Generation MCP Tester</h1>
+  
+  <div class="form-group">
+    <label for="prompt">Image Prompt:</label>
+    <textarea id="prompt" placeholder="Describe the image you want to generate..."></textarea>
+  </div>
+  
+  <div class="form-group">
+    <label for="model">Model:</label>
+    <select id="model">
+      <option value="dall-e-3">DALL-E 3</option>
+      <option value="dall-e-2">DALL-E 2</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="size">Size:</label>
+    <select id="size">
+      <option value="1024x1024">1024x1024</option>
+      <option value="1792x1024">1792x1024</option>
+      <option value="1024x1792">1024x1792</option>
+      <option value="512x512">512x512</option>
+      <option value="256x256">256x256</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="quality">Quality:</label>
+    <select id="quality">
+      <option value="standard">Standard</option>
+      <option value="hd">HD</option>
+    </select>
+  </div>
+  
+  <div class="form-group">
+    <label for="style">Style:</label>
+    <select id="style">
+      <option value="vivid">Vivid</option>
+      <option value="natural">Natural</option>
+    </select>
+  </div>
+  
+  <button id="generateBtn">Generate Image</button>
+  
+  <div class="loading" id="loading">
+    Generating image, please wait...
+  </div>
+  
+  <div class="error" id="error"></div>
+  
+  <div class="result" id="result" style="display: none;">
+    <h3>Result:</h3>
+    <div id="resultJson"></div>
+    
+    <div class="image-container">
+      <h3>Generated Image:</h3>
+      <img id="generatedImg" src="" alt="Generated image will appear here">
+    </div>
+  </div>
+  
+  <script>
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const prompt = document.getElementById('prompt').value;
+      const model = document.getElementById('model').value;
+      const size = document.getElementById('size').value;
+      const quality = document.getElementById('quality').value;
+      const style = document.getElementById('style').value;
+      
+      if (!prompt) {
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = 'Please enter a prompt';
+        return;
+      }
+      
+      document.getElementById('error').style.display = 'none';
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('result').style.display = 'none';
+      
+      try {
+        const response = await fetch('/mcp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            prompt,
+            model,
+            size,
+            quality,
+            style,
+            save: true
+          })
+        });
+        
+        const result = await response.json();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('result').style.display = 'block';
+        
+        if (result.success) {
+          document.getElementById('resultJson').innerHTML = `
+            <pre>${JSON.stringify(result, null, 2)}</pre>
+          `;
+          
+          // Display the image
+          const imageUrl = result.data.imageUrl || result.data.url;
+          document.getElementById('generatedImg').src = imageUrl;
+        } else {
+          document.getElementById('error').style.display = 'block';
+          document.getElementById('error').textContent = `Error: ${result.error}`;
+        }
+      } catch (error) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('error').style.display = 'block';
+        document.getElementById('error').textContent = `Error: ${error.message}`;
+      }
+    });
+  </script>
+</body>
+</html>

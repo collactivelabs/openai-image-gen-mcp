@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  openai-image-gen-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openai-image-gen-mcp
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./generated-images:/app/generated-images
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # Uncomment and set your OpenAI API key here or use an env file
+      # - OPENAI_API_KEY=your_openai_api_key_here
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
