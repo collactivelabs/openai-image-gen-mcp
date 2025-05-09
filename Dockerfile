@@ -16,7 +16,7 @@ RUN mkdir -p /app/generated-images
 VOLUME /app/generated-images
 
 # Expose the port
-EXPOSE 3000
+EXPOSE 3010
 
 # Start the service
 CMD ["npm", "start"]

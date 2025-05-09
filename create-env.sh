@@ -36,10 +36,10 @@ fi
 sed -i '' "s|your_secure_auth_token_here|$auth_token|g" .env
 
 # Set port if needed
-read -p "Enter server port (press enter for default 3000): " port
+read -p "Enter server port (press enter for default 3010): " port
 
 if [ ! -z "$port" ]; then
-  sed -i '' "s|PORT=3000|PORT=$port|g" .env
+  sed -i '' "s|PORT=3010|PORT=$port|g" .env
 fi
 
 echo ".env file created successfully."

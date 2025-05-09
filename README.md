@@ -1,13 +1,19 @@
 # OpenAI Image Generation MCP
 
-An MCP (Model Calling Protocol) service that allows Claude to generate images using OpenAI's DALL-E models.
+An MCP (Model Context Protocol) service that allows Claude to generate images using OpenAI's DALL-E models.
+
+> **Important**: This project includes two different implementations:
+> 1. **MCP Server** (`src/mcp-server.js`) - For direct integration with Claude Desktop via stdin/stdout
+> 2. **HTTP REST API** (`src/index.js`) - For HTTP-based integrations
+> 
+> If you're trying to use this with Claude Desktop, you need the MCP server. See [MCP_SETUP.md](MCP_SETUP.md) for setup instructions.
 
 ## Overview
 
-This service implements the Model Calling Protocol to enable Claude to generate images by calling OpenAI's DALL-E image generation models. When Claude needs to generate an image based on a user's request, it can use this MCP to:
+This service implements the Model Context Protocol to enable Claude to generate images by calling OpenAI's DALL-E image generation models. When Claude needs to generate an image based on a user's request, it can use this MCP to:
 
 1. Send a prompt to OpenAI's DALL-E
-2. Receive back generated image URLs or base64-encoded images
+2. Receive back generated image URLs
 3. Save generated images locally for reference
 4. Return the images to Claude for use in the conversation
 
@@ -17,7 +23,7 @@ This service implements the Model Calling Protocol to enable Claude to generate 
 - Configure image size, quality, and style
 - Generate multiple images at once
 - Save generated images locally
-- Serve generated images via HTTP
+- Serve generated images via HTTP (when using REST API mode)
 
 ## Prerequisites
 
@@ -40,45 +46,72 @@ This service implements the Model Calling Protocol to enable Claude to generate 
 3. Create a `.env` file in the root directory with your OpenAI API key:
    ```
    OPENAI_API_KEY=your_openai_api_key_here
-   PORT=3000  # Optional, defaults to 3000
    ```
 
-## Usage
+## Usage Options
 
-### Starting the Server
+### Option 1: MCP Server for Claude Desktop
 
-Run the server:
+This is the correct mode for Claude Desktop integration. The MCP server communicates via stdin/stdout using JSON-RPC.
 
+**Configuration for Claude Desktop:**
+
+1. Find your Claude Desktop configuration file:
+   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+   - Linux: `~/.config/Claude/claude_desktop_config.json`
+
+2. Add this configuration:
+
+```json
+{
+  "mcpServers": {
+    "openai-image-generation": {
+      "command": "node",
+      "args": ["/full/path/to/openai-image-gen-mcp/src/mcp-server.js"],
+      "env": {
+        "OPENAI_API_KEY": "your-openai-api-key-here"
+      }
+    }
+  }
+}
 ```
-npm start
+
+3. Restart Claude Desktop
+
+**Testing the MCP Server:**
+
+```bash
+node src/mcp-server.js
 ```
 
-The server will start on the port specified in your `.env` file (defaults to 3000).
+Then send a test message:
+```json
+{"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"jsonrpc":"2.0","id":1}
+```
 
-### MCP Endpoints
+### Option 2: HTTP REST API Server
 
-The server exposes the following endpoints:
+The HTTP server is available for other integrations that need a REST API.
+
+**Starting the HTTP Server:**
+
+```bash
+npm run start:http
+# or
+node src/index.js
+```
+
+The server will start on port 3000 (or the port specified in `.env`).
+
+**Endpoints:**
 
 - `GET /health`: Health check endpoint
 - `GET /mcp`: Returns the MCP interface description
 - `POST /mcp`: Executes the image generation with the provided parameters
 - `GET /images/:filename`: Serves generated images
 
-### API Parameters
-
-When calling the `POST /mcp` endpoint, the following parameters are available:
-
-| Parameter | Type | Description | Default |
-|-----------|------|-------------|---------|
-| prompt | string | A text description of the image to generate | Required |
-| model | string | The DALL-E model to use: "dall-e-2" or "dall-e-3" | "dall-e-3" |
-| size | string | Image size: "256x256", "512x512", "1024x1024", "1792x1024", or "1024x1792" | "1024x1024" |
-| quality | string | Image quality: "standard" or "hd" | "standard" |
-| style | string | Image style: "vivid" or "natural" | "vivid" |
-| n | integer | Number of images to generate (1-10) | 1 |
-| save | boolean | Whether to save the image locally | true |
-
-### Example Request
+**Example Request:**
 
 ```json
 {
@@ -90,51 +123,34 @@ When calling the `POST /mcp` endpoint, the following parameters are available:
 }
 ```
 
-### Example Response
+## Available Parameters
 
-```json
-{
-  "success": true,
-  "data": {
-    "url": "https://oaidalleapiprodscus.blob.core.windows.net/private/...",
-    "revised_prompt": "A serene mountain landscape with a crystal-clear lake reflecting the orange and pink hues of the sunset. The mountains are partially covered with snow at their peaks, with pine trees dotting the lower slopes. The sky is painted with vibrant sunset colors, casting a warm glow over the entire scene.",
-    "filePath": "/path/to/generated-images/image_1234567890.png",
-    "imageUrl": "http://localhost:3000/images/image_1234567890.png"
-  }
-}
-```
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| prompt | string | A text description of the image to generate | Required |
+| model | string | The DALL-E model to use: "dall-e-2" or "dall-e-3" | "dall-e-3" |
+| size | string | Image size: "256x256", "512x512", "1024x1024", "1792x1024", or "1024x1792" | "1024x1024" |
+| quality | string | Image quality: "standard" or "hd" | "standard" |
+| style | string | Image style: "vivid" or "natural" | "vivid" |
+| n | integer | Number of images to generate (1-10) | 1 |
 
-## MCP Integration with Claude
+## Project Structure
 
-Configure this MCP server in the Claude API or Console to allow Claude to generate images during conversations.
-
-Example configuration:
-```json
-{
-  "tools": [
-    {
-      "name": "openai_image_generation",
-      "mcp_url": "http://your-server-address:3000/mcp"
-    }
-  ]
-}
-```
-
-## Development
-
-### Project Structure
-
-- `src/index.js`: Main server file
+- `src/mcp-server.js`: MCP server implementation (for Claude Desktop)
+- `src/index.js`: HTTP REST API server
 - `src/openai-image-gen.js`: OpenAI image generation implementation
+- `src/middleware/auth.js`: Authentication middleware
+- `src/utils/logger.js`: Logging utility
 - `generated-images/`: Directory where generated images are saved
 
-### Adding New Features
+## Troubleshooting
 
-To add new features or modify the existing functionality:
+If you're getting "Server transport closed unexpectedly" errors with Claude Desktop:
 
-1. Update the `OpenAIImageGenMCP` class in `src/openai-image-gen.js`
-2. Ensure the MCP interface is updated in the `getMCPInterface()` method
-3. Test your changes by making requests to the `/mcp` endpoint
+1. Make sure you're using the MCP server (`src/mcp-server.js`), not the HTTP server
+2. Check that your Claude Desktop configuration points to the correct file
+3. Ensure your OpenAI API key is valid
+4. Look for error messages in Claude's logs
 
 ## License
 

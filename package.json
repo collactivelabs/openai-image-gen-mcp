@@ -2,14 +2,18 @@
   "name": "openai-image-gen-mcp",
   "version": "1.0.0",
   "description": "MCP service for generating images with OpenAI's DALL-E models",
-  "main": "src/index.js",
+  "main": "src/mcp-server.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
   },
+  "bin": {
+    "openai-image-gen-mcp": "./src/mcp-server.js"
+  },
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node src/mcp-server.js",
+    "start:http": "node src/index.js",
+    "dev": "nodemon src/mcp-server.js",
     "test": "jest"
   },
   "keywords": [
