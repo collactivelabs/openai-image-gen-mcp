@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   openai-image-gen-mcp:
     build:
