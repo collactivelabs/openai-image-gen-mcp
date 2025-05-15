@@ -18,5 +18,9 @@ VOLUME /app/generated-images
 # Expose the port
 EXPOSE 3010
 
+# Create a script to start the service
+RUN echo '#!/bin/bash\nnode src/mcp-server.js' > /app/start-service.sh && \
+    chmod +x /app/start-service.sh
+
 # Start the service
-CMD ["npm", "start"]
+CMD ["/app/start-service.sh"]
