@@ -21,7 +21,16 @@ class OpenAIImageGenMCP {
     this.defaultSize = "1024x1024";
     this.defaultQuality = "standard";
     this.defaultStyle = "vivid";
-    this.outputDir = path.join(process.cwd(), 'generated-images');
+
+    // Use OUTPUT_DIR env var if set, otherwise use path relative to project root
+    // This ensures the directory is created in the right location regardless of cwd
+    const projectRoot = path.join(__dirname, '..');
+    const defaultOutputDir = path.join(projectRoot, 'generated-images');
+    this.outputDir = process.env.OUTPUT_DIR
+      ? (path.isAbsolute(process.env.OUTPUT_DIR)
+          ? process.env.OUTPUT_DIR
+          : path.join(projectRoot, process.env.OUTPUT_DIR))
+      : defaultOutputDir;
 
     // Initialize output directory asynchronously
     this.initPromise = this.initializeOutputDirectory();

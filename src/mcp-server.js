@@ -5,16 +5,19 @@ const OpenAIImageGenMCP = require('./openai-image-gen');
 const { validateConfig } = require('./utils/config');
 const { validateImageGenerationParams, ValidationError } = require('./utils/validation');
 
-// Load environment variables
+// Load environment variables from the project root
 try {
-  require('dotenv').config();
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 } catch (error) {
   // Continue without dotenv
 }
 
 // Log function that writes to stderr (for MCP protocol compliance)
+// Only logs when MCP_MODE is not set to suppress JSON parsing errors
 function log(message) {
-  console.error(`[${new Date().toISOString()}] ${message}`);
+  if (process.env.MCP_MODE !== 'true') {
+    console.error(`[${new Date().toISOString()}] ${message}`);
+  }
 }
 
 // Global variables to be initialized after config validation
@@ -327,7 +330,7 @@ class MCPServer {
     try {
       // Validate configuration (but don't make API call yet to keep startup fast)
       const config = await validateConfig({
-        validateApiKey: false,  // Skip API validation for faster startup
+        validateApiKey: true,  // Skip API validation for faster startup
         exitOnError: false      // Handle errors gracefully
       });
 

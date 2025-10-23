@@ -10,9 +10,9 @@ const { getImageStats, cleanupOldImages, formatBytes } = require('./utils/image-
 const { validateConfig } = require('./utils/config');
 const path = require('path');
 
-// Try to load dotenv
+// Try to load dotenv from project root
 try {
-  require('dotenv').config();
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 } catch (error) {
   // Continue without dotenv
 }

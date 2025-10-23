@@ -140,6 +140,7 @@ async function validateConfig(options = {}) {
       logger.info('OpenAI API key validated successfully');
     }
 
+    logger.info('Validating configuration...' + (process.env.MCP_AUTH_TOKEN ? ' with authentication' : ' without authentication'));
     // Get optional configuration
     const config = {
       apiKey,

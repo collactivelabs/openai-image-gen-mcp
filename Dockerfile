@@ -30,7 +30,6 @@ RUN npm ci --only=production && \
 
 # Copy app source from builder
 COPY --from=builder /app/src ./src
-COPY --from=builder /app/.env* ./ 2>/dev/null || true
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S nodejs && \

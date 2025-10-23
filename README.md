@@ -6,7 +6,7 @@ An MCP (Model Context Protocol) service that allows Claude to generate images us
 > 1. **MCP Server** (`src/mcp-server.js`) - For direct integration with Claude Desktop via stdin/stdout
 > 2. **HTTP REST API** (`src/index.js`) - For HTTP-based integrations
 > 
-> If you're trying to use this with Claude Desktop, you need the MCP server. See [MCP_SETUP.md](MCP_SETUP.md) for setup instructions.
+> If you're trying to use this with Claude Desktop, you need the MCP server. See [MCP_SETUP.md](/docs/MCP_SETUP.md) for setup instructions.
 
 ## Overview
 

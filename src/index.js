@@ -10,9 +10,9 @@ const { validateConfig } = require('./utils/config');
 const { scheduleCleanup, getImageStats, cleanupOldImages } = require('./utils/image-cleanup');
 const { metrics, metricsMiddleware, trackImageGeneration } = require('./utils/metrics');
 
-// Load environment variables from .env file if it exists
+// Load environment variables from .env file in project root if it exists
 try {
-  require('dotenv').config();
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 } catch (error) {
   // dotenv is optional, silently continue without it
 }

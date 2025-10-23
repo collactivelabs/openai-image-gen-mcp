@@ -80,19 +80,21 @@ class Logger {
   error(message, error) {
     if (this.logLevel >= LOG_LEVELS.ERROR) {
       const formattedMessage = this.formatLogMessage('ERROR', message);
-      console.error(formattedMessage);
-      
-      if (error) {
-        console.error(error);
+      // Only output to stderr in MCP mode for critical errors
+      if (process.env.MCP_MODE !== 'true') {
+        console.error(formattedMessage);
+        if (error) {
+          console.error(error);
+        }
       }
-      
+
       this.writeToFile(formattedMessage);
       if (error) {
         this.writeToFile(error.stack || error.toString());
       }
     }
   }
-  
+
   /**
    * Log a warning message
    * @param {string} message - Warning message
@@ -100,11 +102,14 @@ class Logger {
   warn(message) {
     if (this.logLevel >= LOG_LEVELS.WARN) {
       const formattedMessage = this.formatLogMessage('WARN', message);
-      console.warn(formattedMessage);
+      // Suppress warnings in MCP mode to avoid JSON-RPC interference
+      if (process.env.MCP_MODE !== 'true') {
+        console.warn(formattedMessage);
+      }
       this.writeToFile(formattedMessage);
     }
   }
-  
+
   /**
    * Log an info message
    * @param {string} message - Info message
@@ -112,7 +117,10 @@ class Logger {
   info(message) {
     if (this.logLevel >= LOG_LEVELS.INFO) {
       const formattedMessage = this.formatLogMessage('INFO', message);
-      console.info(formattedMessage);
+      // Suppress info logs in MCP mode to avoid JSON-RPC interference
+      if (process.env.MCP_MODE !== 'true') {
+        console.info(formattedMessage);
+      }
       this.writeToFile(formattedMessage);
     }
   }
@@ -124,7 +132,10 @@ class Logger {
   debug(message) {
     if (this.logLevel >= LOG_LEVELS.DEBUG) {
       const formattedMessage = this.formatLogMessage('DEBUG', message);
-      console.debug(formattedMessage);
+      // Suppress debug logs in MCP mode to avoid JSON-RPC interference
+      if (process.env.MCP_MODE !== 'true') {
+        console.debug(formattedMessage);
+      }
       this.writeToFile(formattedMessage);
     }
   }
