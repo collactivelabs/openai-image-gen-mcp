@@ -1,0 +1,49 @@
+# Node modules (will be installed in container)
+node_modules
+npm-debug.log
+
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+!README.md
+docs
+
+# Tests (copied in builder stage only)
+coverage
+*.test.js
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files (should be provided at runtime)
+.env
+.env.local
+.env.*.local
+
+# Generated images (will be volume mounted)
+generated-images
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore
