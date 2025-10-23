@@ -24,12 +24,18 @@ jest.mock('fs', () => ({
   mkdirSync: jest.fn(),
   createWriteStream: jest.fn().mockReturnValue({
     on: jest.fn().mockImplementation(function(event, callback) {
-      if (event === 'finish') {
-        callback();
-      }
+      // Store the callback but don't call it immediately
+      this._listeners = this._listeners || {};
+      this._listeners[event] = callback;
       return this;
     }),
-    close: jest.fn()
+    close: jest.fn().mockImplementation(function(callback) {
+      // Call the callback immediately to simulate successful close
+      if (callback) {
+        setTimeout(callback, 0);
+      }
+    }),
+    _listeners: {}
   }),
   unlink: jest.fn(),
   promises: {
@@ -45,13 +51,22 @@ jest.mock('https', () => ({
       statusCode: 200,
       statusMessage: 'OK',
       headers: { 'content-type': 'image/png' },
-      pipe: jest.fn(),
+      pipe: jest.fn().mockImplementation(function(writeStream) {
+        // Simulate successful pipe by calling the finish event listener
+        setTimeout(() => {
+          if (writeStream._listeners && writeStream._listeners.finish) {
+            writeStream._listeners.finish();
+          }
+        }, 0);
+        return writeStream;
+      }),
       on: jest.fn().mockReturnThis()
     };
     callback(mockResponse);
     return {
       on: jest.fn().mockReturnThis(),
-      setTimeout: jest.fn()
+      setTimeout: jest.fn(),
+      destroy: jest.fn()
     };
   })
 }));

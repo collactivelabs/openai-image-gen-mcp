@@ -275,7 +275,168 @@ class OpenAIImageGenMCP {
     
     return imageData;
   }
-  
+
+  /**
+   * Create variations of an image
+   * @param {string|Buffer} image - Path to image file or Buffer
+   * @param {Object} options - Variation options
+   * @param {number} options.n - Number of variations (1-10)
+   * @param {string} options.size - Image size
+   * @param {string} options.model - Model (only dall-e-2 supports variations)
+   * @returns {Promise<Array>} - Generated variation data
+   */
+  async createImageVariation(image, options = {}) {
+    try {
+      await this.ensureReady();
+
+      const model = options.model || 'dall-e-2';
+      const size = options.size || '1024x1024';
+      const n = options.n || 1;
+
+      // Validate model (only dall-e-2 supports variations)
+      if (model !== 'dall-e-2') {
+        throw new Error('Image variations are only supported by dall-e-2');
+      }
+
+      logger.info(`Creating ${n} variation(s) of image`);
+      logger.debug(`Variation parameters: model=${model}, size=${size}, n=${n}`);
+
+      const startTime = Date.now();
+
+      // Create readable stream from image path or buffer
+      const imageStream = typeof image === 'string' ? fs.createReadStream(image) : image;
+
+      const response = await this.openai.images.createVariation({
+        model,
+        image: imageStream,
+        n,
+        size,
+        response_format: options.response_format || 'url'
+      });
+
+      const duration = Date.now() - startTime;
+      logger.info(`Variations created successfully in ${duration}ms`);
+
+      return response.data;
+    } catch (error) {
+      logger.error('Error creating image variation:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create variations and save them
+   * @param {string|Buffer} image - Path to image file or Buffer
+   * @param {Object} options - Variation options
+   * @returns {Promise<Array>} - Array of variation data with file paths
+   */
+  async createAndSaveImageVariation(image, options = {}) {
+    await this.ensureReady();
+
+    const variations = await this.createImageVariation(image, options);
+    const results = [];
+
+    for (let i = 0; i < variations.length; i++) {
+      if (variations[i].url) {
+        const filename = `variation_${Date.now()}_${i}.png`;
+        const filePath = await this.saveImage(variations[i].url, filename);
+        results.push({
+          ...variations[i],
+          filePath
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Edit an image based on a prompt
+   * @param {string|Buffer} image - Path to source image or Buffer
+   * @param {string} prompt - Text description of desired edit
+   * @param {Object} options - Edit options
+   * @param {string|Buffer} options.mask - Optional mask image (PNG with transparency)
+   * @param {string} options.model - Model (only dall-e-2 supports editing)
+   * @param {number} options.n - Number of edits to generate
+   * @param {string} options.size - Output size
+   * @returns {Promise<Array>} - Generated edit data
+   */
+  async editImage(image, prompt, options = {}) {
+    try {
+      await this.ensureReady();
+
+      const model = options.model || 'dall-e-2';
+      const size = options.size || '1024x1024';
+      const n = options.n || 1;
+
+      // Validate model (only dall-e-2 supports editing)
+      if (model !== 'dall-e-2') {
+        throw new Error('Image editing is only supported by dall-e-2');
+      }
+
+      logger.info(`Editing image with prompt: "${prompt.substring(0, 50)}..."`);
+      logger.debug(`Edit parameters: model=${model}, size=${size}, n=${n}`);
+
+      const startTime = Date.now();
+
+      // Create readable stream from image path or buffer
+      const imageStream = typeof image === 'string' ? fs.createReadStream(image) : image;
+
+      const params = {
+        model,
+        image: imageStream,
+        prompt,
+        n,
+        size,
+        response_format: options.response_format || 'url'
+      };
+
+      // Add mask if provided
+      if (options.mask) {
+        const maskStream = typeof options.mask === 'string' ?
+          fs.createReadStream(options.mask) : options.mask;
+        params.mask = maskStream;
+      }
+
+      const response = await this.openai.images.edit(params);
+
+      const duration = Date.now() - startTime;
+      logger.info(`Image edited successfully in ${duration}ms`);
+
+      return response.data;
+    } catch (error) {
+      logger.error('Error editing image:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Edit image and save results
+   * @param {string|Buffer} image - Path to source image or Buffer
+   * @param {string} prompt - Text description of desired edit
+   * @param {Object} options - Edit options
+   * @returns {Promise<Array>} - Array of edit data with file paths
+   */
+  async editAndSaveImage(image, prompt, options = {}) {
+    await this.ensureReady();
+
+    const edits = await this.editImage(image, prompt, options);
+    const results = [];
+
+    for (let i = 0; i < edits.length; i++) {
+      if (edits[i].url) {
+        const filename = `edit_${Date.now()}_${i}.png`;
+        const filePath = await this.saveImage(edits[i].url, filename);
+        results.push({
+          ...edits[i],
+          filePath
+        });
+      }
+    }
+
+    return results;
+  }
+
   /**
    * Define the MCP interface for Claude
    * @returns {Object} The MCP interface definition
