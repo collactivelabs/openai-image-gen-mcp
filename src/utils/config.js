@@ -149,7 +149,12 @@ async function validateConfig(options = {}) {
       logLevel: parseInt(getEnvVar('LOG_LEVEL', '2'), 10),
       logToFile: getEnvVar('LOG_TO_FILE', 'false') === 'true',
       logFilePath: getEnvVar('LOG_FILE_PATH', './logs/mcp.log'),
-      imageGenerationRateLimit: parseInt(getEnvVar('IMAGE_GENERATION_RATE_LIMIT', '10'), 10)
+      imageGenerationRateLimit: parseInt(getEnvVar('IMAGE_GENERATION_RATE_LIMIT', '10'), 10),
+      // Image cleanup settings
+      imageRetentionDays: parseInt(getEnvVar('IMAGE_RETENTION_DAYS', '7'), 10),
+      imageMaxCount: process.env.IMAGE_MAX_COUNT ? parseInt(process.env.IMAGE_MAX_COUNT, 10) : null,
+      imageCleanupEnabled: getEnvVar('IMAGE_CLEANUP_ENABLED', 'false') === 'true',
+      imageCleanupIntervalHours: parseInt(getEnvVar('IMAGE_CLEANUP_INTERVAL_HOURS', '24'), 10)
     };
 
     // Warn about missing optional security settings

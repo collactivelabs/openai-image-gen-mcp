@@ -19,11 +19,16 @@ This service implements the Model Context Protocol to enable Claude to generate 
 
 ## Features
 
-- Generate images with DALL-E 2 or DALL-E 3
-- Configure image size, quality, and style
-- Generate multiple images at once
-- Save generated images locally
-- Serve generated images via HTTP (when using REST API mode)
+- **Image Generation:** DALL-E 2 and DALL-E 3 support with full parameter control
+- **Image Variations:** Create variations of existing images (DALL-E 2)
+- **Image Editing:** Edit images with prompts and masks (DALL-E 2)
+- **CLI Tool:** Command-line interface for image management and generation
+- **Dual Interface:** MCP server for Claude Desktop + HTTP REST API
+- **Security:** Bearer token authentication, rate limiting, input validation
+- **Image Management:** Automatic cleanup with configurable retention policies
+- **Monitoring:** Prometheus-compatible metrics and admin endpoints
+- **Production Ready:** Comprehensive error handling, logging, and testing (127 tests)
+- **Developer Friendly:** OpenAPI/Swagger docs, detailed examples
 
 ## Prerequisites
 
@@ -50,7 +55,42 @@ This service implements the Model Context Protocol to enable Claude to generate 
 
 ## Usage Options
 
-### Option 1: MCP Server for Claude Desktop
+### Option 1: Command Line Interface (CLI)
+
+The CLI provides easy management of generated images and service configuration:
+
+```bash
+# Display image statistics
+node src/cli.js stats
+
+# List generated images
+node src/cli.js list --sort age --limit 10
+
+# Clean up old images (dry-run)
+node src/cli.js cleanup --retention 7 --dry-run
+
+# Clean up old images (actual deletion)
+node src/cli.js cleanup --retention 7 --max 100
+
+# Validate configuration and API key
+node src/cli.js validate-config
+
+# Generate an image from command line
+node src/cli.js generate "a sunset over mountains" --model dall-e-3 --size 1024x1024
+
+# View help
+node src/cli.js --help
+node src/cli.js <command> --help
+```
+
+**CLI Commands:**
+- `stats` - Display statistics about generated images
+- `list` - List all generated images with sorting options
+- `cleanup` - Clean up old images with retention policies
+- `validate-config` - Validate configuration and OpenAI API key
+- `generate <prompt>` - Generate images from the command line
+
+### Option 2: MCP Server for Claude Desktop
 
 This is the correct mode for Claude Desktop integration. The MCP server communicates via stdin/stdout using JSON-RPC.
 
@@ -90,7 +130,7 @@ Then send a test message:
 {"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{}},"jsonrpc":"2.0","id":1}
 ```
 
-### Option 2: HTTP REST API Server
+### Option 3: HTTP REST API Server
 
 The HTTP server is available for other integrations that need a REST API.
 
@@ -139,9 +179,34 @@ The server will start on port 3000 (or the port specified in `.env`).
 - `src/mcp-server.js`: MCP server implementation (for Claude Desktop)
 - `src/index.js`: HTTP REST API server
 - `src/openai-image-gen.js`: OpenAI image generation implementation
-- `src/middleware/auth.js`: Authentication middleware
-- `src/utils/logger.js`: Logging utility
+- `src/middleware/`: Express middleware (auth, rate limiting)
+- `src/utils/`: Utilities (validation, config, logging, metrics, cleanup)
+- `tests/`: Comprehensive test suites (80+ tests)
+- `docs/`: Documentation including OpenAPI spec
 - `generated-images/`: Directory where generated images are saved
+
+## API Documentation
+
+Full API documentation is available in OpenAPI/Swagger format:
+- **OpenAPI Spec:** [docs/openapi.yaml](docs/openapi.yaml)
+- **Interactive Docs:** Import the spec into [Swagger Editor](https://editor.swagger.io/)
+
+## Monitoring & Administration
+
+### Metrics Endpoints
+- `GET /metrics` - Prometheus-compatible metrics (public)
+- `GET /admin/metrics` - Detailed JSON metrics (requires auth)
+
+### Admin Endpoints (require authentication)
+- `GET /admin/images/stats` - View image statistics
+- `POST /admin/images/cleanup` - Manually trigger cleanup
+
+### Available Metrics
+- HTTP request/response tracking
+- Image generation success/failure rates
+- Response times (p50, p95, p99)
+- System metrics (memory, uptime)
+- Rate limiting status
 
 ## Troubleshooting
 

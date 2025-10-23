@@ -7,6 +7,8 @@ const authMiddleware = require('./middleware/auth');
 const { generalLimiter, imageGenerationLimiter, healthCheckLimiter } = require('./middleware/rate-limit');
 const logger = require('./utils/logger');
 const { validateConfig } = require('./utils/config');
+const { scheduleCleanup, getImageStats, cleanupOldImages } = require('./utils/image-cleanup');
+const { metrics, metricsMiddleware, trackImageGeneration } = require('./utils/metrics');
 
 // Load environment variables from .env file if it exists
 try {
@@ -29,6 +31,7 @@ try {
     // Middleware
     app.use(bodyParser.json());
     app.use(express.static(path.join(__dirname, '../public')));
+    app.use(metricsMiddleware); // Track request metrics
 
     // Apply general rate limiting to all routes (except health check)
     app.use('/mcp', generalLimiter);
@@ -40,7 +43,7 @@ try {
 
     // Serve static files from the generated-images directory
     const fsPromises = require('fs').promises;
-    const imagesDir = path.join(process.cwd(), 'generated-images');
+    const imagesDir = config.outputDir || path.join(process.cwd(), 'generated-images');
     try {
       await fsPromises.access(imagesDir);
     } catch (error) {
@@ -49,9 +52,85 @@ try {
     }
     app.use('/images', express.static(imagesDir));
 
+    // Set up automatic image cleanup if enabled
+    let cleanupScheduler = null;
+    if (config.imageCleanupEnabled) {
+      logger.info('Image cleanup is enabled');
+      cleanupScheduler = scheduleCleanup(imagesDir, {
+        retentionMs: config.imageRetentionDays * 24 * 60 * 60 * 1000,
+        maxFiles: config.imageMaxCount,
+        intervalMs: config.imageCleanupIntervalHours * 60 * 60 * 1000
+      });
+    } else {
+      logger.info('Image cleanup is disabled. Set IMAGE_CLEANUP_ENABLED=true to enable.');
+    }
+
     // Health check endpoint (with permissive rate limiting)
     app.get('/health', healthCheckLimiter, (req, res) => {
       res.json({ status: 'ok' });
+    });
+
+    // Image stats endpoint
+    app.get('/admin/images/stats', authMiddleware, async (req, res) => {
+      try {
+        const stats = await getImageStats(imagesDir);
+        res.json({
+          success: true,
+          stats,
+          cleanup: {
+            enabled: config.imageCleanupEnabled,
+            retentionDays: config.imageRetentionDays,
+            maxFiles: config.imageMaxCount,
+            intervalHours: config.imageCleanupIntervalHours
+          }
+        });
+      } catch (error) {
+        logger.error('Error getting image stats:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    // Manual cleanup endpoint
+    app.post('/admin/images/cleanup', authMiddleware, async (req, res) => {
+      try {
+        const dryRun = req.body.dryRun || false;
+
+        const results = await cleanupOldImages(imagesDir, {
+          retentionMs: config.imageRetentionDays * 24 * 60 * 60 * 1000,
+          maxFiles: config.imageMaxCount,
+          dryRun
+        });
+
+        res.json({
+          success: true,
+          results,
+          dryRun
+        });
+      } catch (error) {
+        logger.error('Error running manual cleanup:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    // Metrics endpoints
+    app.get('/metrics', (req, res) => {
+      // Prometheus text format
+      res.set('Content-Type', 'text/plain; version=0.0.4');
+      res.send(metrics.getPrometheusMetrics());
+    });
+
+    app.get('/admin/metrics', authMiddleware, (req, res) => {
+      // JSON format with more details
+      res.json({
+        success: true,
+        metrics: metrics.getMetrics()
+      });
     });
 
     // MCP descriptor endpoint
@@ -97,14 +176,22 @@ try {
         // Call the handler function with the validated parameters
         const result = await mcpInterface.handler(validatedParams);
 
+        // Calculate response time
+        const responseTime = Date.now() - startTime;
+
+        // Track image generation metrics
+        trackImageGeneration(
+          validatedParams,
+          responseTime,
+          result.success,
+          result.success ? null : result.error
+        );
+
         // If the image was saved, replace the file path with a URL
         if (result.success && result.data.filePath) {
           const filename = path.basename(result.data.filePath);
           result.data.imageUrl = `${req.protocol}://${req.get('host')}/images/${filename}`;
         }
-
-        // Calculate response time
-        const responseTime = Date.now() - startTime;
 
         // Log request completed
         logger.request(req, 'completed', {
