@@ -19,11 +19,13 @@ This service implements the Model Context Protocol to enable Claude to generate 
 
 ## Features
 
-- Generate images with DALL-E 2 or DALL-E 3
-- Configure image size, quality, and style
-- Generate multiple images at once
-- Save generated images locally
-- Serve generated images via HTTP (when using REST API mode)
+- **Image Generation:** DALL-E 2 and DALL-E 3 support with full parameter control
+- **Dual Interface:** MCP server for Claude Desktop + HTTP REST API
+- **Security:** Bearer token authentication, rate limiting, input validation
+- **Image Management:** Automatic cleanup with configurable retention policies
+- **Monitoring:** Prometheus-compatible metrics and admin endpoints
+- **Production Ready:** Comprehensive error handling, logging, and testing
+- **Developer Friendly:** OpenAPI/Swagger docs, detailed examples
 
 ## Prerequisites
 
@@ -139,9 +141,34 @@ The server will start on port 3000 (or the port specified in `.env`).
 - `src/mcp-server.js`: MCP server implementation (for Claude Desktop)
 - `src/index.js`: HTTP REST API server
 - `src/openai-image-gen.js`: OpenAI image generation implementation
-- `src/middleware/auth.js`: Authentication middleware
-- `src/utils/logger.js`: Logging utility
+- `src/middleware/`: Express middleware (auth, rate limiting)
+- `src/utils/`: Utilities (validation, config, logging, metrics, cleanup)
+- `tests/`: Comprehensive test suites (80+ tests)
+- `docs/`: Documentation including OpenAPI spec
 - `generated-images/`: Directory where generated images are saved
+
+## API Documentation
+
+Full API documentation is available in OpenAPI/Swagger format:
+- **OpenAPI Spec:** [docs/openapi.yaml](docs/openapi.yaml)
+- **Interactive Docs:** Import the spec into [Swagger Editor](https://editor.swagger.io/)
+
+## Monitoring & Administration
+
+### Metrics Endpoints
+- `GET /metrics` - Prometheus-compatible metrics (public)
+- `GET /admin/metrics` - Detailed JSON metrics (requires auth)
+
+### Admin Endpoints (require authentication)
+- `GET /admin/images/stats` - View image statistics
+- `POST /admin/images/cleanup` - Manually trigger cleanup
+
+### Available Metrics
+- HTTP request/response tracking
+- Image generation success/failure rates
+- Response times (p50, p95, p99)
+- System metrics (memory, uptime)
+- Rate limiting status
 
 ## Troubleshooting
 

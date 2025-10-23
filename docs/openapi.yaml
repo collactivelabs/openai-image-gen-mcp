@@ -1,0 +1,519 @@
+openapi: 3.0.3
+info:
+  title: OpenAI Image Generation MCP API
+  description: |
+    REST API for generating images using OpenAI's DALL-E models.
+
+    ## Features
+    - Generate images with DALL-E 2 and DALL-E 3
+    - Automatic image saving and serving
+    - Rate limiting and authentication
+    - Image cleanup and management
+    - Prometheus metrics
+
+    ## Authentication
+    Most endpoints require Bearer token authentication. Include your token in the Authorization header:
+    ```
+    Authorization: Bearer your-token-here
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3010
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Health
+    description: Server health and status
+  - name: Image Generation
+    description: Generate images with DALL-E
+  - name: Admin
+    description: Administrative endpoints (requires authentication)
+  - name: Monitoring
+    description: Metrics and monitoring
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the server is running
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /mcp:
+    get:
+      tags:
+        - Image Generation
+      summary: Get MCP interface description
+      description: Returns the Model Context Protocol interface definition
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: MCP interface definition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MCPInterface'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags:
+        - Image Generation
+      summary: Generate an image
+      description: Generate an image using OpenAI's DALL-E models
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImageGenerationRequest'
+            examples:
+              basic:
+                summary: Basic request
+                value:
+                  prompt: "A serene mountain landscape with a lake at sunset"
+              advanced:
+                summary: Advanced request with all options
+                value:
+                  prompt: "A futuristic cityscape at night with neon lights"
+                  model: "dall-e-3"
+                  size: "1792x1024"
+                  quality: "hd"
+                  style: "vivid"
+                  save: true
+      responses:
+        '200':
+          description: Image generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageGenerationResponse'
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /images/{filename}:
+    get:
+      tags:
+        - Image Generation
+      summary: Get generated image
+      description: Retrieve a previously generated image
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          description: Image filename
+          schema:
+            type: string
+            example: image_1234567890.png
+      responses:
+        '200':
+          description: Image file
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image not found
+
+  /admin/images/stats:
+    get:
+      tags:
+        - Admin
+      summary: Get image statistics
+      description: Get statistics about generated images
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Image statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageStats'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/images/cleanup:
+    post:
+      tags:
+        - Admin
+      summary: Manually trigger image cleanup
+      description: Clean up old generated images based on retention policy
+      security:
+        - BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+                  description: If true, don't actually delete files
+                  default: false
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CleanupResults'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /admin/metrics:
+    get:
+      tags:
+        - Monitoring
+      summary: Get detailed metrics
+      description: Get detailed application metrics in JSON format
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Application metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Metrics'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /metrics:
+    get:
+      tags:
+        - Monitoring
+      summary: Get Prometheus metrics
+      description: Get metrics in Prometheus text format
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: |
+                  # HELP process_uptime_seconds Process uptime in seconds
+                  # TYPE process_uptime_seconds gauge
+                  process_uptime_seconds 3600
+
+                  # HELP http_requests_total Total HTTP requests
+                  # TYPE http_requests_total counter
+                  http_requests_total{method="POST",path="/mcp"} 42
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token authentication. Set MCP_AUTH_TOKEN environment variable on server.
+
+  schemas:
+    ImageGenerationRequest:
+      type: object
+      required:
+        - prompt
+      properties:
+        prompt:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: A detailed text description of the image to generate
+          example: "A serene mountain landscape with a lake at sunset, digital art"
+        model:
+          type: string
+          enum: [dall-e-2, dall-e-3]
+          default: dall-e-3
+          description: The DALL-E model to use
+        size:
+          type: string
+          enum: [256x256, 512x512, 1024x1024, 1792x1024, 1024x1792]
+          default: 1024x1024
+          description: Image size (some sizes only available for specific models)
+        quality:
+          type: string
+          enum: [standard, hd]
+          default: standard
+          description: Image quality (hd only available for dall-e-3)
+        style:
+          type: string
+          enum: [vivid, natural]
+          default: vivid
+          description: Image style (only available for dall-e-3)
+        n:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+          description: Number of images to generate (dall-e-3 only supports 1)
+        save:
+          type: boolean
+          default: true
+          description: Whether to save the image locally
+
+    ImageGenerationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            url:
+              type: string
+              format: uri
+              description: OpenAI CDN URL for the image
+              example: "https://oaidalleapiprodscus.blob.core.windows.net/..."
+            revised_prompt:
+              type: string
+              description: The prompt as revised by DALL-E 3
+              example: "A serene mountain landscape..."
+            filePath:
+              type: string
+              description: Local file path (if save=true)
+              example: "/app/generated-images/image_1234567890.png"
+            imageUrl:
+              type: string
+              format: uri
+              description: URL to access the saved image via this API
+              example: "http://localhost:3010/images/image_1234567890.png"
+
+    ValidationError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Prompt must not exceed 4000 characters"
+        field:
+          type: string
+          example: "prompt"
+
+    MCPInterface:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "openai_image_generation"
+        description:
+          type: string
+          example: "Generate images using OpenAI's DALL-E models"
+        parameters:
+          type: object
+
+    ImageStats:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        stats:
+          type: object
+          properties:
+            count:
+              type: integer
+              example: 42
+            totalSize:
+              type: integer
+              description: Total size in bytes
+              example: 15728640
+            totalSizeFormatted:
+              type: string
+              example: "15 MB"
+            oldestFile:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                ageDays:
+                  type: integer
+            newestFile:
+              type: object
+              properties:
+                name:
+                  type: string
+                age:
+                  type: integer
+                ageDays:
+                  type: integer
+            averageAgeDays:
+              type: integer
+            averageSizeFormatted:
+              type: string
+        cleanup:
+          type: object
+          properties:
+            enabled:
+              type: boolean
+            retentionDays:
+              type: integer
+            maxFiles:
+              type: integer
+              nullable: true
+            intervalHours:
+              type: integer
+
+    CleanupResults:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        results:
+          type: object
+          properties:
+            filesScanned:
+              type: integer
+              example: 42
+            filesDeleted:
+              type: integer
+              example: 5
+            spaceFreed:
+              type: integer
+              example: 5242880
+            errors:
+              type: array
+              items:
+                type: object
+        dryRun:
+          type: boolean
+
+    Metrics:
+      type: object
+      properties:
+        success:
+          type: boolean
+        metrics:
+          type: object
+          properties:
+            timestamp:
+              type: string
+              format: date-time
+            uptime:
+              type: integer
+              description: Server uptime in milliseconds
+            counters:
+              type: array
+              items:
+                type: object
+            gauges:
+              type: array
+              items:
+                type: object
+            histograms:
+              type: array
+              items:
+                type: object
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authorization header
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "Missing or invalid authorization header"
+
+    Forbidden:
+      description: Invalid authentication token
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "Invalid authentication token"
+
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "Image generation rate limit exceeded. Please try again later."
+              retryAfter:
+                type: integer
+                description: Unix timestamp when to retry
+              limit:
+                type: integer
+              remaining:
+                type: integer
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              error:
+                type: string
+                example: "Internal server error"
