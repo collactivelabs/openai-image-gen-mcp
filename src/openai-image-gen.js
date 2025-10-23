@@ -1,8 +1,10 @@
 const OpenAI = require('openai');
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 const https = require('https');
 const logger = require('./utils/logger');
+const { validateImageGenerationParams } = require('./utils/validation');
 
 /**
  * OpenAI Image Generation MCP
@@ -13,18 +15,44 @@ class OpenAIImageGenMCP {
     this.openai = new OpenAI({
       apiKey: apiKey || process.env.OPENAI_API_KEY
     });
-    
+
     // Default configs
     this.defaultModel = "dall-e-3";
     this.defaultSize = "1024x1024";
     this.defaultQuality = "standard";
     this.defaultStyle = "vivid";
     this.outputDir = path.join(process.cwd(), 'generated-images');
-    
-    // Ensure output directory exists
-    if (!fs.existsSync(this.outputDir)) {
-      fs.mkdirSync(this.outputDir, { recursive: true });
-      logger.info(`Created output directory: ${this.outputDir}`);
+
+    // Initialize output directory asynchronously
+    this.initPromise = this.initializeOutputDirectory();
+  }
+
+  /**
+   * Initialize the output directory asynchronously
+   * @private
+   */
+  async initializeOutputDirectory() {
+    try {
+      await fsPromises.access(this.outputDir);
+    } catch (error) {
+      // Directory doesn't exist, create it
+      try {
+        await fsPromises.mkdir(this.outputDir, { recursive: true });
+        logger.info(`Created output directory: ${this.outputDir}`);
+      } catch (mkdirError) {
+        logger.error(`Failed to create output directory: ${mkdirError.message}`);
+        throw mkdirError;
+      }
+    }
+  }
+
+  /**
+   * Ensure the output directory is ready before operations
+   * @private
+   */
+  async ensureReady() {
+    if (this.initPromise) {
+      await this.initPromise;
     }
   }
   
@@ -36,29 +64,48 @@ class OpenAIImageGenMCP {
    */
   async generateImage(prompt, options = {}) {
     try {
-      const model = options.model || this.defaultModel;
-      const size = options.size || this.defaultSize;
-      const quality = options.quality || this.defaultQuality;
-      const style = options.style || this.defaultStyle;
-      const n = options.n || 1;
-      
-      logger.info(`Generating image with prompt: "${prompt.substring(0, 50)}..."`);
-      logger.debug(`Image generation parameters: model=${model}, size=${size}, quality=${quality}, style=${style}, n=${n}`);
-      
-      const startTime = Date.now();
-      const response = await this.openai.images.generate({
-        model,
+      // Ensure output directory is ready
+      await this.ensureReady();
+
+      // Validate parameters before making API call
+      const validatedParams = validateImageGenerationParams({
         prompt,
-        n,
-        size,
-        quality,
-        style,
-        response_format: options.response_format || 'url'
+        ...options
       });
-      
+
+      logger.info(`Generating image with prompt: "${validatedParams.prompt.substring(0, 50)}..."`);
+      logger.debug(`Image generation parameters: ${JSON.stringify({
+        model: validatedParams.model,
+        size: validatedParams.size,
+        quality: validatedParams.quality,
+        style: validatedParams.style,
+        n: validatedParams.n
+      })}`);
+
+      const startTime = Date.now();
+
+      // Build API request parameters
+      const apiParams = {
+        model: validatedParams.model,
+        prompt: validatedParams.prompt,
+        n: validatedParams.n,
+        size: validatedParams.size,
+        response_format: validatedParams.response_format || options.response_format || 'url'
+      };
+
+      // Add optional parameters based on model support
+      if (validatedParams.quality) {
+        apiParams.quality = validatedParams.quality;
+      }
+      if (validatedParams.style) {
+        apiParams.style = validatedParams.style;
+      }
+
+      const response = await this.openai.images.generate(apiParams);
+
       const duration = Date.now() - startTime;
       logger.info(`Image generated successfully in ${duration}ms`);
-      
+
       return response.data;
     } catch (error) {
       logger.error('Error generating image:', error);
@@ -70,26 +117,138 @@ class OpenAIImageGenMCP {
    * Save an image from a URL to the local filesystem
    * @param {string} imageUrl - The URL of the image to save
    * @param {string} filename - The filename to save the image as
+   * @param {number} timeout - Download timeout in milliseconds (default: 30000)
    * @returns {Promise<string>} - The path to the saved image
    */
-  async saveImage(imageUrl, filename) {
+  async saveImage(imageUrl, filename, timeout = 30000) {
     return new Promise((resolve, reject) => {
       const fullPath = path.join(this.outputDir, filename);
-      const file = fs.createWriteStream(fullPath);
-      
-      https.get(imageUrl, (response) => {
-        response.pipe(file);
-        
-        file.on('finish', () => {
+      let file = null;
+      let completed = false;
+      let timeoutId = null;
+
+      // Cleanup function
+      const cleanup = () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+        if (file && !completed) {
           file.close();
-          logger.info(`Image saved to ${fullPath}`);
-          resolve(fullPath);
+          // Delete incomplete file
+          fs.unlink(fullPath, (err) => {
+            if (err) {
+              logger.debug(`Could not delete incomplete file ${fullPath}: ${err.message}`);
+            }
+          });
+        }
+      };
+
+      try {
+        file = fs.createWriteStream(fullPath);
+
+        // Set up timeout
+        timeoutId = setTimeout(() => {
+          if (!completed) {
+            completed = true;
+            cleanup();
+            const error = new Error(`Download timeout after ${timeout}ms`);
+            error.code = 'ETIMEDOUT';
+            logger.error(`Download timeout for ${imageUrl}`);
+            reject(error);
+          }
+        }, timeout);
+
+        const request = https.get(imageUrl, (response) => {
+          // Check for HTTP errors
+          if (response.statusCode !== 200) {
+            completed = true;
+            cleanup();
+            const error = new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`);
+            error.statusCode = response.statusCode;
+            logger.error(`HTTP error downloading image from ${imageUrl}:`, error);
+            reject(error);
+            return;
+          }
+
+          // Check content type
+          const contentType = response.headers['content-type'];
+          if (contentType && !contentType.startsWith('image/')) {
+            completed = true;
+            cleanup();
+            const error = new Error(`Invalid content type: ${contentType}`);
+            error.contentType = contentType;
+            logger.error(`Invalid content type for image from ${imageUrl}: ${contentType}`);
+            reject(error);
+            return;
+          }
+
+          // Pipe the response to file
+          response.pipe(file);
+
+          // Handle stream errors
+          response.on('error', (err) => {
+            if (!completed) {
+              completed = true;
+              cleanup();
+              logger.error(`Error reading response stream from ${imageUrl}:`, err);
+              reject(err);
+            }
+          });
+
+          file.on('error', (err) => {
+            if (!completed) {
+              completed = true;
+              cleanup();
+              logger.error(`Error writing file ${fullPath}:`, err);
+              reject(err);
+            }
+          });
+
+          file.on('finish', () => {
+            if (!completed) {
+              completed = true;
+              clearTimeout(timeoutId);
+              file.close((err) => {
+                if (err) {
+                  logger.error(`Error closing file ${fullPath}:`, err);
+                  reject(err);
+                } else {
+                  logger.info(`Image saved to ${fullPath}`);
+                  resolve(fullPath);
+                }
+              });
+            }
+          });
         });
-      }).on('error', (err) => {
-        logger.error(`Error downloading image from ${imageUrl}:`, err);
-        fs.unlink(fullPath, () => {}); // Delete the file if there's an error
+
+        // Handle request errors
+        request.on('error', (err) => {
+          if (!completed) {
+            completed = true;
+            cleanup();
+            logger.error(`Error downloading image from ${imageUrl}:`, err);
+            reject(err);
+          }
+        });
+
+        // Set request timeout
+        request.setTimeout(timeout, () => {
+          if (!completed) {
+            completed = true;
+            request.destroy();
+            cleanup();
+            const error = new Error(`Request timeout after ${timeout}ms`);
+            error.code = 'ETIMEDOUT';
+            logger.error(`Request timeout for ${imageUrl}`);
+            reject(error);
+          }
+        });
+      } catch (err) {
+        completed = true;
+        cleanup();
+        logger.error(`Unexpected error saving image:`, err);
         reject(err);
-      });
+      }
     });
   }
   
@@ -100,6 +259,9 @@ class OpenAIImageGenMCP {
    * @returns {Promise<Object>} - Generated image data and file path
    */
   async generateAndSaveImage(prompt, options = {}) {
+    // Ensure output directory is ready
+    await this.ensureReady();
+
     const imageData = await this.generateImage(prompt, options);
     const filename = `image_${Date.now()}.png`;
     

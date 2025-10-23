@@ -3,6 +3,7 @@
  */
 
 const fs = require('fs');
+const fsPromises = require('fs').promises;
 const path = require('path');
 
 // Log levels
@@ -18,13 +19,24 @@ class Logger {
     this.logLevel = options.logLevel || (process.env.NODE_ENV === 'production' ? LOG_LEVELS.INFO : LOG_LEVELS.DEBUG);
     this.logToFile = options.logToFile || false;
     this.logFilePath = options.logFilePath || path.join(process.cwd(), 'logs', 'mcp.log');
-    
-    // Create logs directory if logging to file
+    this.initPromise = null;
+
+    // Initialize logs directory asynchronously if logging to file
     if (this.logToFile) {
-      const logsDir = path.dirname(this.logFilePath);
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-      }
+      this.initPromise = this.initializeLogDirectory();
+    }
+  }
+
+  /**
+   * Initialize the log directory asynchronously
+   * @private
+   */
+  async initializeLogDirectory() {
+    const logsDir = path.dirname(this.logFilePath);
+    try {
+      await fsPromises.access(logsDir);
+    } catch (error) {
+      await fsPromises.mkdir(logsDir, { recursive: true });
     }
   }
   
@@ -43,10 +55,21 @@ class Logger {
    * Write a log message to the log file
    * @param {string} message - Formatted log message
    */
-  writeToFile(message) {
+  async writeToFile(message) {
     if (!this.logToFile) return;
-    
-    fs.appendFileSync(this.logFilePath, message + '\n');
+
+    try {
+      // Ensure log directory is ready
+      if (this.initPromise) {
+        await this.initPromise;
+        this.initPromise = null; // Clear after first use
+      }
+
+      await fsPromises.appendFile(this.logFilePath, message + '\n');
+    } catch (error) {
+      // Fallback to console if file write fails
+      console.error('Failed to write to log file:', error.message);
+    }
   }
   
   /**
